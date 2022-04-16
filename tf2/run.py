@@ -18,6 +18,7 @@
 import json
 import math
 import os
+import pandas as pd
 
 from absl import app
 from absl import flags
@@ -467,12 +468,19 @@ def main(argv):
   if len(argv) > 1:
     raise app.UsageError('Too many command-line arguments.')
 
-
+  ''' REPLACE WITH REGULAR DATASET
   builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
   builder.download_and_prepare()
   num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
   num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples
   num_classes = builder.info.features['label'].num_classes
+  '''
+
+  data_df = pd.read_csv('data.csv')
+  ds = tf.data.Dataset.from_tensor_slices((data_df['image'], data_df['label']))
+  num_train_examples = tf.data.experimental.cardinality(ds)
+  num_eval_examples = 0
+  num_classes = 2
 
   train_steps = model_lib.get_train_steps(num_train_examples)
   eval_steps = FLAGS.eval_steps or int(
@@ -513,7 +521,7 @@ def main(argv):
   if FLAGS.mode == 'eval':
     for ckpt in tf.train.checkpoints_iterator(
         FLAGS.model_dir, min_interval_secs=15):
-      result = perform_evaluation(model, builder, eval_steps, ckpt, strategy,
+      result = perform_evaluation(model, ds, eval_steps, ckpt, strategy,
                                   topology)
       if result['global_step'] >= train_steps:
         logging.info('Eval complete. Exiting...')
@@ -522,7 +530,7 @@ def main(argv):
     summary_writer = tf.summary.create_file_writer(FLAGS.model_dir)
     with strategy.scope():
       # Build input pipeline.
-      ds = data_lib.build_distributed_dataset(builder, FLAGS.train_batch_size,
+      ds = data_lib.build_distributed_dataset(ds, FLAGS.train_batch_size,
                                               True, strategy, topology)
 
       # Build LR schedule and optimizer.
@@ -659,7 +667,7 @@ def main(argv):
       logging.info('Training complete...')
 
     if FLAGS.mode == 'train_then_eval':
-      perform_evaluation(model, builder, eval_steps,
+      perform_evaluation(model, ds, eval_steps,
                          checkpoint_manager.latest_checkpoint, strategy,
                          topology)
 

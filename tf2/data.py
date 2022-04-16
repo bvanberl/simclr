@@ -13,6 +13,9 @@
 # See the License for the specific simclr governing permissions and
 # limitations under the License.
 # ==============================================================================
+
+# ********************** BUILDER HAS BEEN TURNED INTO A DATASET **************************
+
 """Data pipeline."""
 
 import functools
@@ -47,10 +50,11 @@ def build_input_fn(builder, global_batch_size, topology, is_training):
     logging.info('Per-replica batch size: %d', batch_size)
     preprocess_fn_pretrain = get_preprocess_fn(is_training, is_pretrain=True)
     preprocess_fn_finetune = get_preprocess_fn(is_training, is_pretrain=False)
-    num_classes = builder.info.features['label'].num_classes
+    num_classes = 2 # builder.info.features['label'].num_classes
 
-    def map_fn(image, label):
+    def map_fn(img_name, label):
       """Produces multiple transformations of the same batch."""
+      image = tf.io.decode_jpeg(img_name, channels=3)
       if is_training and FLAGS.train_mode == 'pretrain':
         xs = []
         for _ in range(2):  # Two transformations
@@ -62,7 +66,7 @@ def build_input_fn(builder, global_batch_size, topology, is_training):
       return image, label
 
     logging.info('num_input_pipelines: %d', input_context.num_input_pipelines)
-    dataset = builder.as_dataset(
+    '''dataset = builder.as_dataset(
         split=FLAGS.train_split if is_training else FLAGS.eval_split,
         shuffle_files=is_training,
         as_supervised=True,
@@ -72,7 +76,7 @@ def build_input_fn(builder, global_batch_size, topology, is_training):
         read_config=tfds.ReadConfig(
             interleave_cycle_length=32,
             interleave_block_length=1,
-            input_context=input_context))
+            input_context=input_context))'''
     if FLAGS.cache_dataset:
       dataset = dataset.cache()
     if is_training:
